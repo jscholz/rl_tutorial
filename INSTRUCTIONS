@@ -1,0 +1,16 @@
+Your task is to create an agent that learns to find its way around a grid world. Code should be written in C++ or Python. If you prefer to use a different language, please check with us first. The task involves solving the cliff-world problem as described by Sutton & Barto:
+
+http://webdocs.cs.ualberta.ca/~sutton/book/ebook/node65.html
+
+Use Q-learning and Sarsa to solve the problem. We will create a github repo for you to contribute to. Please check-in code often (as you would in a real project) so we can follow your progress easily. Please plot a reward per episode graph for both algorithms. 
+
+SARSA http://webdocs.cs.ualberta.ca/~sutton/book/ebook/node64.html 
+Q-learning http://webdocs.cs.ualberta.ca/~sutton/book/ebook/node65.html
+
+We will assign high weight to good code documentation and style. Please include unit tests in your project.
+
+Please check your code in to the following Github repository:
+
+https://github.com/DMRec/repo7
+
+We prefer that your code be provided in a way that can be run on a Linux / UNIX machine.
