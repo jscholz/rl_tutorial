@@ -15,7 +15,7 @@ class RLAgent(object):
     '''
     def __init__(self, legal_actions, gamma, *args, **kwargs):
         '''
-
+        Initialize the RL agent with the required domain parameters.
 
         :param gamma: MDP discount factor
         :param legal_actions: A list of legal actions

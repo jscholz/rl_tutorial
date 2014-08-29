@@ -21,7 +21,7 @@ def run_episode(mdp, agent):
     while not mdp.is_terminal(state):
         action = agent.get_action(state)
         newstate = mdp.get_transition(state, action)
-        reward = mdp.get_reward(state, action)
+        reward = mdp.get_reward(newstate)
         agent.update(state, action, newstate, reward)
 
         if isinstance(mdp, Drawable2D):
@@ -44,7 +44,7 @@ def train_agent(mdp, agent, max_episodes, epsilon_decay=0.9):
 
 if __name__ == '__main__':
     mdp = CliffMDP(12, 4)
-    agent = QLearningAgent(legal_actions=mdp.actions, 
-    					   gamma=0.9, alpha=0.5, epsilon=0.9)
+    agent = QLearningAgent(legal_actions=mdp.actions, gamma=mdp.gamma,
+    					   alpha=0.5, epsilon=0.9)
     # run_episode(mdp, agent)
-    train_agent(mdp, agent, 10, 0.9)
+    train_agent(mdp, agent, 100, 0.9)

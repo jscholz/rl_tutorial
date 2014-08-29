@@ -18,29 +18,26 @@ class MDP(object):
     and starting and terminal distributions.
     
     The state and action space is determined implicitly by the return
-    values of getTransition and getAction.  The former of these
+    values of get_transition and get_action.  The former of these
     encodes domain dynamics, while the latter encodes a possibly 
     discrete set which can be either sampled from or queried with 
     an index value.  Both of these types should be hashable and 
     comparable (so no mutable types!*)
-    
-    * so if lists and or float is necessary, consider wrapping it 
-    with MDPElement   
     '''
     
-    def __init__(self):
+    def __init__(self, gamma=0.9):
+        self.gamma = gamma
         self._states = None
         self._actions = None
-        self.gamma = None        
     
-    def get_reward(self, state, action):
+    def get_reward(self, state):
         '''
-        Return a reward for the given state and action.
-            * Don't forget: if this function steps the world for the given action
-              before computing a reward then it encodes some model information,
-              which may be relevant for model-learning experiments
-        :param state:
-        :param action:
+        Return a reward for the given state.
+        Note: this implementation doesn't consider rewards which depend on 
+        actions, because while more general it encodes model information
+        in the reward function.  
+
+        :param state: A hashable state object (e.g. a tuple)
         '''
         raise NotImplementedError()
     
@@ -48,6 +45,9 @@ class MDP(object):
         '''
         Returns a new state sampled from the transition distribution  
         for given state and action.  This state should be hashable.
+
+        :param state:
+        :param action:
         '''
         raise NotImplementedError()
     
@@ -56,6 +56,8 @@ class MDP(object):
         Returns an action from some internal action representation, 
         possibly conditional on idx.  Should return random sample
         if idx is None.   
+
+        :param idx:
         '''
         raise NotImplementedError()
     
@@ -70,17 +72,6 @@ class MDP(object):
         Returns true if given state is terminal 
         '''
         return False
-    
-    @classmethod
-    def getDistance(cls, s1, s2):
-        '''
-        Implements a state-space distance function 
-        :param cls:
-        :param s1: First state
-        :param s2: Second state
-        :return tuple containing scalar distance and an error vector
-        '''
-        raise NotImplementedError()
     
     # define read-only properties for states and actions
     # Note: not all MDP's will define these explicitly
@@ -161,13 +152,14 @@ class CliffMDP(MDP, GridVisualizer):
     http://webdocs.cs.ualberta.ca/~sutton/book/ebook/node65.html
     '''
 
-    def __init__(self, width=12, height=4):
+    def __init__(self, width=12, height=4, *args, **kwargs):
         '''
         Construct a Cliff-MDP with the provided dimensions.
         '''
+        MDP.__init__(self, *args, **kwargs)
         self.width = width
         self.height = height
-        MDP.__init__(self)
+
 
         # define range of cliff states
         self.cliff_idxs = np.array([[1, height-1], [width-2, height-1]])
@@ -183,16 +175,13 @@ class CliffMDP(MDP, GridVisualizer):
         # initialize visualizer last, as it depends on MDP is_terminal method
         GridVisualizer.__init__(self)
 
-    def get_reward(self, state, action):
+    def get_reward(self, state):
         '''
-        Return a reward for the given state and action.
-            * Don't forget: if this function steps the world for the given action
-              before computing a reward then it encodes some model information,
-              which may be relevant for model-learning experiments
-        :param state:
-        :param action:
+        Return a reward for the given state.
+
+        :param state: The query state.
         '''
-        if self.is_cliff(state):
+        if self._is_cliff(state):
             return -100.
         else:
             return -1.
@@ -201,17 +190,22 @@ class CliffMDP(MDP, GridVisualizer):
         '''
         Returns a new state sampled from the transition distribution  
         for given state and action.  This state should be hashable.
+
+        :param state:
+        :param action:
         '''
         ds = self._action_effects[action]
         newstate = (np.clip(state[0] + ds[0], 0, self.width),
                     np.clip(state[1] + ds[1], 0, self.height))
         return newstate
     
-    def get_action(self, idx = None):
+    def get_action(self, idx=None):
         '''
         Returns an action from some internal action representation, 
         possibly conditional on idx.  Should return random sample
         if idx is None.   
+
+        :param idx: An action index.  If None a random action is returned
         '''
         if idx is None:
             idx = np.random.choice(self.actions)[0]
@@ -221,18 +215,23 @@ class CliffMDP(MDP, GridVisualizer):
         '''
         Returns the starting state for the MDP.  Should be hashable
         '''
-        return (0, self.height-1)
+        return (0, self.height - 1)
     
     def is_terminal(self, state):
         '''
         Returns true if given state is terminal.
-        '''
-        return self.is_cliff(state) or (state == (self.width, 0))
 
-    def is_cliff(self, state):
+        :param state: A state tuple
+        '''
+        return self._is_cliff(state) or (state == (self.width - 1, 
+                                                   self.height - 1))
+
+    def _is_cliff(self, state):
         '''
         Tests whether the given state is on the cliff -- a range 
         of terminal states with large negative reward.  
+
+        :param state: A state tuple
         '''
         if state[0] >= self.cliff_idxs[0][0] and state[0] <= self.cliff_idxs[1][0] and\
            state[1] >= self.cliff_idxs[0][1] and state[1] <= self.cliff_idxs[1][1]:
@@ -245,7 +244,7 @@ class CliffMDP(MDP, GridVisualizer):
             for i in xrange(self.width):
                 if (i, j) == state:
                     print "*",
-                elif self.is_cliff((i, j)):
+                elif self._is_cliff((i, j)):
                     print "_",
                 else:
                     print u"\u25A1",
