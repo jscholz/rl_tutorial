@@ -8,6 +8,7 @@ Created on August 29, 2014
 
 
 import numpy as np
+from collections import defaultdict
 
 class RLAgent(object):
     '''
@@ -45,7 +46,7 @@ class QLearningAgent(RLAgent):
     Implements a basic Q-learning agent.
     '''
     class QFunction(dict):
-        def slice(self, el, pos = 0):
+        def slice(self, el, pos=0):
             '''
             Slices the Q-function by looking for the the provided 
             element by checking the key tuples at the specified position
@@ -53,12 +54,25 @@ class QLearningAgent(RLAgent):
             than a numpy slices, but this is Q-learning...
             '''
             return {k:v for k, v in self.iteritems() if k[pos] == el}
-    
+
     def __init__(self, alpha=0.5, epsilon=0.9, *args, **kwargs):
         super(QLearningAgent, self).__init__(*args, **kwargs)
         self.alpha = alpha
         self.epsilon = epsilon
         self.Q = QLearningAgent.QFunction()
+        # self.Q = QFunction()
+
+    def _get_action_values(self, state=None):
+        '''
+        Returns the dictionary of q-values for the current state.
+        If no state is provided, returns the entire Q table.
+
+        :param state: The query state (optional)
+        '''
+        if state is not None:
+            return self.Q.slice(state)
+        else:
+            return self.Q
 
     def _get_greedy_action(self, state):
         '''
@@ -67,7 +81,7 @@ class QLearningAgent(RLAgent):
 
         :param state: The query state 
         '''
-        Q_s = self.Q.slice(state)
+        Q_s = self._get_action_values(state)
         if len(Q_s) == 0:
             # if no values exist yet, initialize a legal action to zero
             Q_s = {(state, self._get_random_action()): 0.}
@@ -98,7 +112,7 @@ class QLearningAgent(RLAgent):
         super(QLearningAgent, self).update(state, action, newstate, reward)
         s = state
         a = action
-        #self.Q[s,a] = self.Q[s,a] + self.alpha * (reward + self.gamma * np.max(self.Q[newstate,:]) - self.Q[s,a])
+
         if not self.Q.has_key((s, a)):
             Q_sa = 0.
         else:
@@ -108,5 +122,27 @@ class QLearningAgent(RLAgent):
             Q_s = [0.]
         self.Q[(s, a)] = Q_sa + self.alpha * (reward + self.gamma * np.max(Q_s) - Q_sa)
 
+
+class QFunction(object):
+    def __init__(self):
+        self.Q = {}
+        self.V = defaultdict(set)
+
+    def set(self, state, action, value):
+        self.Q[state, action] = value
+        self.V[state].add(action)
+
+    def get(self, state, action):
+        return self.Q[state, action]
+
+    def slice(self, state):
+        return {action: self.Q[state, action] for action in self.V[state]}
+
 if __name__ == '__main__':
-    pass
+    Q = QFunction()
+
+    Q.set((0,0), 3, 0.3)
+    Q.set((0,0), 1, 0.1)
+    Q.set((0,0), 2, 0.2)
+
+    print Q.slice((0,0))

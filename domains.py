@@ -91,6 +91,12 @@ class Drawable2D(object):
         '''
         raise NotImplementedError()
 
+    def render(self, state):
+        '''
+        Renders the provided state.
+        '''
+        raise NotImplementedError()
+
 class GridVisualizer(Tkinter.Tk, Drawable2D):
     '''
     A generic mixin class which defines a draw method for 2D grid-based MDPs.  
@@ -99,8 +105,12 @@ class GridVisualizer(Tkinter.Tk, Drawable2D):
     and colors all terminal states yellow.  The current state is visualized
     as a green circle, which is red in terminal states.
 
-    This class assumes that width and height members are defined before
-    initialization, and that is_terminal is callable.  
+    This class assumes that the state and action members have been defined
+    for the target MDP before initialization, and that is_terminal is 
+    callable.  
+    States are assumed to be (x,y) tuples corresponding to grid cells, and 
+    actions are assumed to be integers in {0,1,2,3} corresponding to the 
+    directions {N,W,S,E}.
     '''
     def __init__(self, *args, **kwargs):
         '''
@@ -113,37 +123,106 @@ class GridVisualizer(Tkinter.Tk, Drawable2D):
         scr_width = self.width * self.cellwidth
         scr_height = self.height * self.cellheight
 
+        # main TK canvas
         self.canvas = Tkinter.Canvas(self, width=scr_width, height=scr_height,
                                      borderwidth=0, highlightthickness=0)
         self.canvas.pack(side="top", fill="both", expand="true")
 
-        self.rect = {}
-        self.oval = {}
-        for column in xrange(self.width):
-            for row in xrange(self.height):
-                x1 = column * self.cellwidth
-                y1 = row * self.cellheight
-                x2 = x1 + self.cellwidth
-                y2 = y1 + self.cellheight
-                state = (column, row)
-                flag = "terminal" if self.is_terminal(state) else "nonterminal"
-                self.rect[state] = self.canvas.create_rectangle(
-                    x1,y1,x2,y2, fill="blue", tags=("rect", flag))
-                self.oval[state] = self.canvas.create_oval(
-                    x1+2,y1+2,x2-2,y2-2, fill="blue", tags="oval")
+        # containers and helpers for canvas items
+        self._rect = {}      # visualize grid cells
+        self._oval = {}      # visualize current state
+        self._wedge = {}     # visualize action values
+        self._vmax = -1       # for color scaling actions
+        self._vmin = -2       # for color scaling actions
+
+        # color definitions
+        self._bg_color = "light grey"
+        self._sprite_color = "dark green"
+        self._terminal_color = "red"
+
+        # iterate through the defined states
+        for state in self.states:
+            x0 = state[0] * self.cellwidth
+            y0 = state[1] * self.cellheight
+            x1 = x0 + self.cellwidth
+            y1 = y0 + self.cellheight
+
+            # draw 
+            if self.is_terminal(state):
+                flag = "terminal"
+            else:
+                flag = "default"
+            
+            self._rect[state] = self.canvas.create_rectangle(
+                x0, y0, x1, y1, fill=self._bg_color, tags=("rect", flag))
+            
+            for action in self.actions:
+                self._wedge[(state, action)] = self.canvas.create_arc(
+                    x0, y0, x1, y1,
+                    start=action * 90 + 45,
+                    extent=90, fill=self._bg_color, tags="qvals")
+
+            self._oval[state] = self.canvas.create_oval(
+                x0+5, y0+5, x1-5, y1-5, fill=self._bg_color, tags="oval")
 
         self.update()
-        
+    
+    def render(self, state, action_values=None):
+        '''
+        Redraws the buffer to visualize the current state.
 
-    def render(self, state):
-        self.canvas.itemconfig("rect", fill="blue")
-        self.canvas.itemconfig("terminal", fill="yellow")
-        self.canvas.itemconfig("oval", fill="blue")
-        if not self.oval.has_key(state):
+        Also implements a method for visualizing policies using the 
+        action values, if provided.
+        For grid domains, assumes actions are the standard NWSE, and 
+        represented in that order using the integers 0:3.  
+
+        :param action_values: A dictionary of (s,a) tuples and their corresponding
+                              values (optional)
+        '''
+        if not self._oval.has_key(state):
             return
-        item_id = self.oval[state]
-        color = "red" if self.is_terminal(state) else "green"
+
+        # fill all the keyed cells by color
+        self.canvas.itemconfig("rect", fill=self._bg_color)
+        self.canvas.itemconfig("terminal", fill=self._terminal_color)
+        self.canvas.itemconfig("oval", fill=self._bg_color)
+
+        # color the target state
+        item_id = self._oval[state]
+        color = self._terminal_color if self.is_terminal(state)\
+                                     else self._sprite_color
         self.canvas.itemconfig(item_id, fill=color)
+
+        # draw policy if provided
+        if action_values:
+            # iterate only through the represented s,a values
+            # for k,v in action_values.iteritems():
+            #     state = k[0]
+            #     action = k[1]
+
+            #     if self._wedge.has_key((state, action)):
+            #         item_id = self._wedge[(state, action)]
+            #         if v > self._vmax:
+            #             self._vmax = v
+            #         if v < self._vmin:
+            #             self._vmin = v
+            #         color_val = (v - self._vmin) / (self._vmax - self._vmin)
+            #         if color_val < 0.5:
+            #             # scaled blue for low-value actions
+            #             color = '#%02x%02x%02x' % (color_val * 255, 0, 0)
+            #         else:
+            #             # scaled red for high-value actions
+            #             color = '#%02x%02x%02x' % (0, 0, color_val * 255)
+            #         print "color_val: ", color_val
+            #         print "v, max, min: ", v, self._vmax, self._vmin
+            #         print "color: ", color
+            #         self.canvas.itemconfig(item_id, fill=color)
+
+            for state in self.states:
+                #todo color things state-wise
+                pass
+
+        # draw (no after calls since mainloop not running)
         self.canvas.update_idletasks()
 
 class CliffMDP(MDP, GridVisualizer):
@@ -168,9 +247,9 @@ class CliffMDP(MDP, GridVisualizer):
         self._states = [(i, j) for i in xrange(width) for j in xrange(height)]
         self._states_gen = ((i, j) for i in xrange(width) for j in xrange(height))
 
-        # define actions corresponding to the cardinal directions {N,E,S,W}
+        # define actions corresponding to the cardinal directions {N,W,S,E}
         self._actions = [(i) for i in xrange(4)]
-        self._action_effects = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+        self._action_effects = [(0, -1), (-1, 0), (0, 1), (1, 0)] # screen coords
 
         # initialize visualizer last, as it depends on MDP is_terminal method
         GridVisualizer.__init__(self)
