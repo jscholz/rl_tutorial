@@ -218,6 +218,28 @@ class GridVisualizer(Tkinter.Tk, Drawable2D):
             #         print "color: ", color
             #         self.canvas.itemconfig(item_id, fill=color)
 
+            for state in action_values.states:
+                qvals = action_values.slice(state)
+                _, vmax = max(qvals.iteritems(), key=lambda x:x[1])
+                _, vmin = min(qvals.iteritems(), key=lambda x:x[1])
+                for action, value in qvals.iteritems():
+                    if self._wedge.has_key((state, action)):
+                        color_val = (value - vmin) / (vmax - vmin)
+                        if np.isnan(color_val):
+                            color_val = 1.0
+                        # import ipdb;ipdb.set_trace()
+                        if color_val < 0.5:
+                            # scaled blue for low-value actions
+                            color = '#%02x%02x%02x' % (color_val * 255, 0, 0)
+                        else:
+                            # scaled red for high-value actions
+                            color = '#%02x%02x%02x' % (0, 0, color_val * 255)
+                        print "color_val: ", color_val
+                        print "v, max, min: ", value, vmax, vmin
+                        print "color: ", color
+                        item_id = self._wedge[(state, action)]
+                        self.canvas.itemconfig(item_id, fill=color)
+
             for state in self.states:
                 #todo color things state-wise
                 pass
