@@ -8,7 +8,7 @@ Created on August 29, 2014
 
 
 import numpy as np
-from collections import defaultdict
+from collections import defaultdict, deque
 
 class RLAgent(object):
     '''
@@ -111,13 +111,14 @@ class QFunction(object):
     # read-only access to state set
     states = property(lambda self: self._S)
 
-class QLearningAgent(RLAgent):
+class QFunctionAgent(RLAgent):
     '''
-    Implements a basic Q-learning agent.
+    Implements a basic QFunction-based learning agent, using an epsilon-greedy
+    exploration policy.  
     '''
 
     def __init__(self, alpha=0.5, epsilon=0.9, *args, **kwargs):
-        super(QLearningAgent, self).__init__(*args, **kwargs)
+        super(QFunctionAgent, self).__init__(*args, **kwargs)
         self.alpha = alpha
         self.epsilon = epsilon
         self.Q = QFunction()
@@ -168,16 +169,81 @@ class QLearningAgent(RLAgent):
             return self._get_greedy_action(state)
         else:
             return self._get_random_action(state)
-            
+    
+    def _td_error(self, state, action, newstate, reward):
+        raise NotImplementedError()
+
     def update(self, state, action, newstate, reward):
-        super(QLearningAgent, self).update(state, action, newstate, reward)
-        s = state
-        a = action
-        Q_sa = self.Q[state, action] # defaults to zero if not defined
+        super(QFunctionAgent, self).update(state, action, newstate, reward)
+
+        self.Q[state, action] = self.Q[state, action] + self.alpha * \
+            self._td_error(state, action, newstate, reward)
+
+class QLearningAgent(QFunctionAgent):
+    '''
+    '''
+
+    def _td_error(self, state, action, newstate, reward):
         Q_s = self.Q.slice(newstate).values()
         if len(Q_s) == 0:
             Q_s = [0.]
-        self.Q[(s, a)] = Q_sa + self.alpha * (reward + self.gamma * np.max(Q_s) - Q_sa)
+
+        return reward + self.gamma * np.max(Q_s) - self.Q[state, action]
+
+class SARSAAgent(QFunctionAgent):
+    '''
+    '''
+    def __init__(self, *args, **kwargs):
+        super(SARSAAgent, self).__init__(*args, **kwargs)
+        self._next_action = None
+        self._next_state = None
+
+    def get_action(self, state):
+        '''
+        For SARSA we must select an action for the next state during update 
+        calls.  For this to be on-policy, we of course need to actually execute
+        that action, but only if the query state hasn't changed (i.e. if the
+        episode ended).  
+        '''
+        if state == self._next_state and self._next_action is not None:
+            return self._next_action
+        else:
+            return super(SARSAAgent, self).get_action(state)
+
+    def _td_error(self, state, action, newstate, reward):
+        # get_action will return e-greedy if s
+        self._next_state = None # forces e-greedy even if state==newstate
+        self._next_action = self.get_action(newstate)
+        self._next_state = newstate
+        Q_sa_next = self.Q[self._next_state, self._next_action]
+
+        return reward + self.gamma * Q_sa_next - self.Q[state, action]
+
+# class QLambdaAgent(QLearningAgent):
+#     '''
+#     '''
+
+#     def __init__(self, lbda=0.9, max_hist=20, *args, **kwargs):
+#         super(QLambdaAgent, self).__init__(*args, **kwargs)
+#         self._lambda = lbda
+#         self._hist = deque(maxlen=max_hist)
+
+#     def get_action(self, state):
+#         action = super(QLambdaAgent, self).get_action(state)
+#         self._hist.appendleft((state, action))   
+#         return action
+
+#     def update(self, state, action, newstate, reward):
+#         '''
+#         Rather than maintaining an eligibility score over the entire state
+#         space, we instead maintain a queue of visited states. 
+#         This is mathematically equivalent to sutton & barto, up to truncation 
+#         of the queue.  but allows 
+#         '''
+#         super(QLearningAgent, self).update(state, action, newstate, reward)
+#         # compute temporal difference signal
+#         tde = reward + self.gamma * np.max(Q_s) - Q_sa
+#         import ipdb;ipdb.set_trace()
 
 if __name__ == '__main__':
     Q = QFunction()

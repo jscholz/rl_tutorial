@@ -15,14 +15,14 @@ class MDP(object):
     '''
     A base class for markov decision problems, which must define at
     a minimum: a reward function, an action set, a transition model,
-    and starting and terminal distributions.
+    and starting and terminal distributions.  
     
     The state and action space is determined implicitly by the return
     values of get_transition and get_action.  The former of these
     encodes domain dynamics, while the latter encodes a possibly 
     discrete set which can be either sampled from or queried with 
     an index value.  Both of these types should be hashable and 
-    comparable (so no mutable types!*)
+    comparable (so no mutable types!)
     '''
     
     def __init__(self, gamma=0.9):
@@ -102,8 +102,8 @@ class GridVisualizer(Tkinter.Tk, Drawable2D):
     A generic mixin class which defines a draw method for 2D grid-based MDPs.  
 
     Without any customization, draws a blue grid of the appropriate size, 
-    and colors all terminal states yellow.  The current state is visualized
-    as a green circle, which is red in terminal states.
+    and colors all terminal states.  The current state is visualized
+    as a blue circle, which is red in terminal states.
 
     This class assumes that the state and action members have been defined
     for the target MDP before initialization, and that is_terminal is 
@@ -137,7 +137,7 @@ class GridVisualizer(Tkinter.Tk, Drawable2D):
 
         # color definitions
         self._bg_color = "light grey"
-        self._sprite_color = "dark green"
+        self._sprite_color = "dark blue"
         self._terminal_color = "red"
 
         # iterate through the defined states
@@ -147,24 +147,23 @@ class GridVisualizer(Tkinter.Tk, Drawable2D):
             x1 = x0 + self.cellwidth
             y1 = y0 + self.cellheight
 
-            # draw 
-            if self.is_terminal(state):
-                flag = "terminal"
-            else:
-                flag = "default"
-            
+            # draw containers for grid cells
+            cflag = "terminal" if self.is_terminal(state) else "default"
             self._rect[state] = self.canvas.create_rectangle(
-                x0, y0, x1, y1, fill=self._bg_color, tags=("rect", flag))
+                x0, y0, x1, y1, fill=self._bg_color, tags=("rect", cflag))
             
+            # draw containers for actions
             for action in self.actions:
                 self._wedge[(state, action)] = self.canvas.create_arc(
                     x0, y0, x1, y1,
                     start=action * 90 + 45,
                     extent=90, fill=self._bg_color, tags="qvals")
 
+            # draw containers for sprite state
             self._oval[state] = self.canvas.create_oval(
                 x0+5, y0+5, x1-5, y1-5, fill=self._bg_color, tags="oval")
 
+        # draw to screen (necessary if not calling TK mainloop)
         self.update()
     
     def render(self, state, action_values=None):
@@ -195,54 +194,30 @@ class GridVisualizer(Tkinter.Tk, Drawable2D):
 
         # draw policy if provided
         if action_values:
-            # iterate only through the represented s,a values
-            # for k,v in action_values.iteritems():
-            #     state = k[0]
-            #     action = k[1]
-
-            #     if self._wedge.has_key((state, action)):
-            #         item_id = self._wedge[(state, action)]
-            #         if v > self._vmax:
-            #             self._vmax = v
-            #         if v < self._vmin:
-            #             self._vmin = v
-            #         color_val = (v - self._vmin) / (self._vmax - self._vmin)
-            #         if color_val < 0.5:
-            #             # scaled blue for low-value actions
-            #             color = '#%02x%02x%02x' % (color_val * 255, 0, 0)
-            #         else:
-            #             # scaled red for high-value actions
-            #             color = '#%02x%02x%02x' % (0, 0, color_val * 255)
-            #         print "color_val: ", color_val
-            #         print "v, max, min: ", v, self._vmax, self._vmin
-            #         print "color: ", color
-            #         self.canvas.itemconfig(item_id, fill=color)
-
             for state in action_values.states:
                 qvals = action_values.slice(state)
                 _, vmax = max(qvals.iteritems(), key=lambda x:x[1])
                 _, vmin = min(qvals.iteritems(), key=lambda x:x[1])
                 for action, value in qvals.iteritems():
                     if self._wedge.has_key((state, action)):
-                        color_val = (value - vmin) / (vmax - vmin)
+                        try:
+                            color_val = (value - vmin) / (vmax - vmin)
+                        except:
+                            color_val = 0.5
                         if np.isnan(color_val):
                             color_val = 1.0
                         # import ipdb;ipdb.set_trace()
                         if color_val < 0.5:
-                            # scaled blue for low-value actions
+                            # scaled red for low-value actions
                             color = '#%02x%02x%02x' % (color_val * 255, 0, 0)
                         else:
-                            # scaled red for high-value actions
-                            color = '#%02x%02x%02x' % (0, 0, color_val * 255)
-                        print "color_val: ", color_val
-                        print "v, max, min: ", value, vmax, vmin
-                        print "color: ", color
+                            # scaled green for high-value actions
+                            color = '#%02x%02x%02x' % (0, color_val * 255, 0)
+                        # print "color_val: ", color_val
+                        # print "v, max, min: ", value, vmax, vmin
+                        # print "color: ", color
                         item_id = self._wedge[(state, action)]
                         self.canvas.itemconfig(item_id, fill=color)
-
-            for state in self.states:
-                #todo color things state-wise
-                pass
 
         # draw (no after calls since mainloop not running)
         self.canvas.update_idletasks()
