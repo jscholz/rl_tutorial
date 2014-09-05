@@ -27,10 +27,11 @@ class RLAgent(object):
 
         # accumulated reward
         self.r_total = 0
-        
+
     def get_action(self, state):
-        '''Returns an action for the provided state.  Use this function to
-        implement the exploration policy for the agent.  
+        '''
+        Returns an action for the provided state.  Use this function to
+        implement the exploration policy for the agent. 
         '''
         raise NotImplementedError()
 
@@ -38,6 +39,11 @@ class RLAgent(object):
         '''
         Implements the update rule for the learning agent.  Called every time
         the agent executes an action in the target domain.
+
+        :param state: The starting state for the backup
+        :param action: The action executed in that state
+        :param newstate: The resulting state
+        :param reward: The reward obtained
         '''
         self.r_total += reward
 
@@ -66,9 +72,9 @@ class QFunction(object):
     '''
 
     def __init__(self):
-        self._Q = defaultdict(float) # undefined queries default to zero
-        self._V = defaultdict(set)   # undefined queries default to empty set
-        self._S = set()              # keeps track of defined states
+        self._Q = defaultdict(float) # Q-function; default to zero
+        self._V = defaultdict(set)   # Value-function; default to empty set
+        self._S = set()              # State set: keeps track of defined states
 
     def __str__(self):
         return str(self._Q)
@@ -88,17 +94,38 @@ class QFunction(object):
         self.remove(key[0], key[1])
 
     def __iter__(self):
-        return iter(self.Q)
+        return iter(self._Q)
 
     def get(self, state, action):
+        '''
+        Retrieves the specified (state, action) entry.
+
+        :param state: The query state
+        :param action: The query action
+        '''
         return self._Q[state, action]
 
     def set(self, state, action, value):
+        '''
+        Adds the given state-action value to the Q-function, and updates
+        internal structures as necessary.
+
+        :param state: The query state
+        :param action: The query action
+        :param value: The value to assign
+        '''
         self._Q[state, action] = value
         self._V[state].add(action)
         self._S.add(state)
 
     def remove(self, state, action):
+        '''
+        Removes the given state-action pair from the Q-function, and updates
+        internal structures as necessary.
+
+        :param state: The query state
+        :param action: The query action
+        '''
         self._Q.pop((state, action))
         self._V[state].remove(action)
 
@@ -106,6 +133,12 @@ class QFunction(object):
             self._S.remove(state)
 
     def slice(self, state):
+        '''
+        Returns a slice of the Q-function for the provided state as a
+        dictionary, keyed by action. 
+
+        :param state: The query state
+        '''
         return {action: self._Q[state, action] for action in self._V[state]}
 
     # read-only access to state set
@@ -140,7 +173,7 @@ class QFunctionAgent(RLAgent):
         Returns the greedy policy for the provided state, which maximizes
         the expected return given the agent's current Q-function.
 
-        :param state: The query state 
+        :param state: The query state
         '''
         Q_s = self._get_action_values(state)
 
@@ -149,7 +182,8 @@ class QFunctionAgent(RLAgent):
             Q_s = {self._get_random_action(): 0.}
 
         # select the argmax action
-        key, value = max(Q_s.iteritems(), key=lambda x:x[1])
+        key, value = max(Q_s.iteritems(), key=lambda x: x[1])
+
         return key
 
     def _get_random_action(self, state=None):
@@ -164,6 +198,8 @@ class QFunctionAgent(RLAgent):
     def get_action(self, state):
         '''
         Implements an epsilon-greedy exploration policy.
+
+        :param state: The query state
         '''
         if np.random.rand() > self.epsilon:
             return self._get_greedy_action(state)
@@ -174,6 +210,9 @@ class QFunctionAgent(RLAgent):
         raise NotImplementedError()
 
     def update(self, state, action, newstate, reward):
+        '''
+        Implements a Q-learning (off-policy) backup operation.
+        '''
         super(QFunctionAgent, self).update(state, action, newstate, reward)
 
         self.Q[state, action] = self.Q[state, action] + self.alpha * \
@@ -181,9 +220,14 @@ class QFunctionAgent(RLAgent):
 
 class QLearningAgent(QFunctionAgent):
     '''
+    Implements a Q-Learning agent.
     '''
 
     def _td_error(self, state, action, newstate, reward):
+        '''
+        Computes the temporal-difference error for a Q-learning (off-policy)
+        backup operation.
+        '''
         Q_s = self.Q.slice(newstate).values()
         if len(Q_s) == 0:
             Q_s = [0.]
@@ -192,7 +236,9 @@ class QLearningAgent(QFunctionAgent):
 
 class SARSAAgent(QFunctionAgent):
     '''
+    Implements a SARSA agent.  
     '''
+    
     def __init__(self, *args, **kwargs):
         super(SARSAAgent, self).__init__(*args, **kwargs)
         self._next_action = None
@@ -210,40 +256,22 @@ class SARSAAgent(QFunctionAgent):
         else:
             return super(SARSAAgent, self).get_action(state)
 
-    def _td_error(self, state, action, newstate, reward):
-        # get_action will return e-greedy if s
-        self._next_state = None # forces e-greedy even if state==newstate
-        self._next_action = self.get_action(newstate)
+    def _td_error(self, state, action, newstate, reward, next_action=None):
+        '''
+        Computes the temporal-difference error for a SARSA (on-policy)
+        backup operation.
+        '''
+        if next_action is None:
+            self._next_state = None # forces e-greedy even if state==newstate
+            self._next_action = self.get_action(newstate)
+        else:
+            self._next_action = next_action
+
         self._next_state = newstate
+
         Q_sa_next = self.Q[self._next_state, self._next_action]
 
         return reward + self.gamma * Q_sa_next - self.Q[state, action]
-
-# class QLambdaAgent(QLearningAgent):
-#     '''
-#     '''
-
-#     def __init__(self, lbda=0.9, max_hist=20, *args, **kwargs):
-#         super(QLambdaAgent, self).__init__(*args, **kwargs)
-#         self._lambda = lbda
-#         self._hist = deque(maxlen=max_hist)
-
-#     def get_action(self, state):
-#         action = super(QLambdaAgent, self).get_action(state)
-#         self._hist.appendleft((state, action))   
-#         return action
-
-#     def update(self, state, action, newstate, reward):
-#         '''
-#         Rather than maintaining an eligibility score over the entire state
-#         space, we instead maintain a queue of visited states. 
-#         This is mathematically equivalent to sutton & barto, up to truncation 
-#         of the queue.  but allows 
-#         '''
-#         super(QLearningAgent, self).update(state, action, newstate, reward)
-#         # compute temporal difference signal
-#         tde = reward + self.gamma * np.max(Q_s) - Q_sa
-#         import ipdb;ipdb.set_trace()
 
 if __name__ == '__main__':
     Q = QFunction()

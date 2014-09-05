@@ -15,49 +15,49 @@ class MDP(object):
     '''
     A base class for markov decision problems, which must define at
     a minimum: a reward function, an action set, a transition model,
-    and starting and terminal distributions.  
-    
+    and starting and terminal distributions.
+
     The state and action space is determined implicitly by the return
     values of get_transition and get_action.  The former of these
-    encodes domain dynamics, while the latter encodes a possibly 
-    discrete set which can be either sampled from or queried with 
-    an index value.  Both of these types should be hashable and 
+    encodes domain dynamics, while the latter encodes a possibly
+    discrete set which can be either sampled from or queried with
+    an index value.  Both of these types should be hashable and
     comparable (so no mutable types!)
     '''
-    
+
     def __init__(self, gamma=0.9):
         self.gamma = gamma
         self._states = None
         self._actions = None
-    
+
     def get_reward(self, state):
         '''
         Return a reward for the given state.
-        Note: this implementation doesn't consider rewards which depend on 
+        Note: this implementation doesn't consider rewards which depend on
         actions, because while more general it encodes model information
         in the reward function.  
 
         :param state: A hashable state object (e.g. a tuple)
         '''
         raise NotImplementedError()
-    
+
     def get_transition(self, state, action, **kwargs):
         '''
         Returns a new state sampled from the transition distribution  
         for given state and action.  This state should be hashable.
 
-        :param state:
-        :param action:
+        :param state: A hashable state object (e.g. a tuple)
+        :param action: A hashable action object (e.g. an integer)
         '''
         raise NotImplementedError()
     
-    def get_action(self, idx = None):
+    def get_action(self, idx=None):
         '''
         Returns an action from some internal action representation, 
         possibly conditional on idx.  Should return random sample
         if idx is None.   
 
-        :param idx:
+        :param idx: An optional action index.
         '''
         raise NotImplementedError()
     
@@ -70,6 +70,8 @@ class MDP(object):
     def is_terminal(self, state):
         '''
         Returns true if given state is terminal 
+
+        :param state: A hashable state object (e.g. a tuple)
         '''
         return False
     
@@ -85,11 +87,6 @@ class Drawable2D(object):
     '''
     An abstract mixin class for visualizing 2D domains.  
     '''
-    def render(self, state):
-        '''
-        Renders the provided state.
-        '''
-        raise NotImplementedError()
 
     def render(self, state):
         '''
@@ -112,6 +109,7 @@ class GridVisualizer(Tkinter.Tk, Drawable2D):
     actions are assumed to be integers in {0,1,2,3} corresponding to the 
     directions {N,W,S,E}.
     '''
+
     def __init__(self, *args, **kwargs):
         '''
 
@@ -175,10 +173,11 @@ class GridVisualizer(Tkinter.Tk, Drawable2D):
         For grid domains, assumes actions are the standard NWSE, and 
         represented in that order using the integers 0:3.  
 
-        :param action_values: A dictionary of (s,a) tuples and their corresponding
-                              values (optional)
+        :param state: The state to render
+        :param action_values: A dictionary of (s,a) tuples and their 
+                              corresponding values (optional)
         '''
-        if not self._oval.has_key(state):
+        if not hasattr(self, 'canvas') or not self._oval.has_key(state):
             return
 
         # fill all the keyed cells by color
@@ -196,8 +195,8 @@ class GridVisualizer(Tkinter.Tk, Drawable2D):
         if action_values:
             for state in action_values.states:
                 qvals = action_values.slice(state)
-                _, vmax = max(qvals.iteritems(), key=lambda x:x[1])
-                _, vmin = min(qvals.iteritems(), key=lambda x:x[1])
+                _, vmax = max(qvals.iteritems(), key=lambda x: x[1])
+                _, vmin = min(qvals.iteritems(), key=lambda x: x[1])
                 for action, value in qvals.iteritems():
                     if self._wedge.has_key((state, action)):
                         try:
@@ -206,16 +205,13 @@ class GridVisualizer(Tkinter.Tk, Drawable2D):
                             color_val = 0.5
                         if np.isnan(color_val):
                             color_val = 1.0
-                        # import ipdb;ipdb.set_trace()
                         if color_val < 0.5:
                             # scaled red for low-value actions
                             color = '#%02x%02x%02x' % (color_val * 255, 0, 0)
                         else:
                             # scaled green for high-value actions
                             color = '#%02x%02x%02x' % (0, color_val * 255, 0)
-                        # print "color_val: ", color_val
-                        # print "v, max, min: ", value, vmax, vmin
-                        # print "color: ", color
+
                         item_id = self._wedge[(state, action)]
                         self.canvas.itemconfig(item_id, fill=color)
 
@@ -228,28 +224,34 @@ class CliffMDP(MDP, GridVisualizer):
     http://webdocs.cs.ualberta.ca/~sutton/book/ebook/node65.html
     '''
 
-    def __init__(self, width=12, height=4, *args, **kwargs):
+    def __init__(self, width=12, height=4, render=False, *args, **kwargs):
         '''
         Construct a Cliff-MDP with the provided dimensions.
+
+        :param width: The width, in grid cells
+        :param height: The height, in grid cells
         '''
         MDP.__init__(self, *args, **kwargs)
         self.width = width
         self.height = height
 
-
-        # define range of cliff states
+        # define range of cliff states along bottom border
         self.cliff_idxs = np.array([[1, height-1], [width-2, height-1]])
 
         # define state space corresponding to cells on the grid
-        self._states = [(i, j) for i in xrange(width) for j in xrange(height)]
-        self._states_gen = ((i, j) for i in xrange(width) for j in xrange(height))
+        self._states = [(i, j) for i in xrange(width) 
+            for j in xrange(height)]
+        self._states_gen = ((i, j) for i in xrange(width) 
+            for j in xrange(height))
 
         # define actions corresponding to the cardinal directions {N,W,S,E}
         self._actions = [(i) for i in xrange(4)]
-        self._action_effects = [(0, -1), (-1, 0), (0, 1), (1, 0)] # screen coords
+        # define action effects in screen coords
+        self._action_effects = [(0, -1), (-1, 0), (0, 1), (1, 0)]
 
-        # initialize visualizer last, as it depends on MDP is_terminal method
-        GridVisualizer.__init__(self)
+        if render:
+            # initialize visualizer last, b/c depends on MDP is_terminal method
+            GridVisualizer.__init__(self)
 
     def get_reward(self, state):
         '''
@@ -264,15 +266,16 @@ class CliffMDP(MDP, GridVisualizer):
     
     def get_transition(self, state, action, **kwargs):
         '''
-        Returns a new state sampled from the transition distribution  
+        Returns a new state sampled from the transition distribution 
         for given state and action.  This state should be hashable.
 
-        :param state:
-        :param action:
+        :param state: The starting state
+        :param action: The action to execute
         '''
+
         ds = self._action_effects[action]
-        newstate = (np.clip(state[0] + ds[0], 0, self.width),
-                    np.clip(state[1] + ds[1], 0, self.height))
+        newstate = (np.clip(state[0] + ds[0], 0, self.width - 1),
+                    np.clip(state[1] + ds[1], 0, self.height - 1))
         return newstate
     
     def get_action(self, idx=None):
@@ -309,13 +312,18 @@ class CliffMDP(MDP, GridVisualizer):
 
         :param state: A state tuple
         '''
-        if state[0] >= self.cliff_idxs[0][0] and state[0] <= self.cliff_idxs[1][0] and\
-           state[1] >= self.cliff_idxs[0][1] and state[1] <= self.cliff_idxs[1][1]:
+        if state[0] >= self.cliff_idxs[0][0] and\
+           state[0] <= self.cliff_idxs[1][0] and\
+           state[1] >= self.cliff_idxs[0][1] and\
+           state[1] <= self.cliff_idxs[1][1]:
             return True
         else:
             return False
     
     def print_state(self, state):
+        '''
+        Visualizes the cliff domain state in the terminal.
+        '''
         for j in xrange(self.height):
             for i in xrange(self.width):
                 if (i, j) == state:
@@ -330,7 +338,7 @@ class CliffMDP(MDP, GridVisualizer):
 
 if __name__ == "__main__":  
 
-    cmdp = CliffMDP(width=12, height=4)
+    cmdp = CliffMDP(width=5, height=5, render=True)
 
     state = cmdp.get_start_state()
     cmdp.render(state)
