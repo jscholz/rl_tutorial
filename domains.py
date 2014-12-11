@@ -287,7 +287,7 @@ class CliffMDP(MDP, GridVisualizer):
         :param idx: An action index.  If None a random action is returned
         '''
         if idx is None:
-            idx = np.random.choice(self.actions)[0]
+            idx = np.random.choice(self.actions)
         return self.actions[idx]
     
     def get_start_state(self):

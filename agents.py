@@ -192,7 +192,7 @@ class QFunctionAgent(RLAgent):
 
         :param state: The query state 
         '''
-        idx = np.random.choice(self.legal_actions)[0]
+        idx = np.random.choice(self.legal_actions)
         return self.legal_actions[idx]
 
     def get_action(self, state):
